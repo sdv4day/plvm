@@ -12,6 +12,7 @@ module plvm.lexer;
 import plvm.token;
 import std.exception : enforce;
 import std.conv : text;
+import std.string : join;
 
 /**
  * 词法分析异常类
@@ -511,13 +512,22 @@ public:
                             tokens ~= makeToken(TokenType.tokCaret, "^");
                         break;
                     default:
-                        throw new LexerException(text("未识别的字符: '", c, "'"), line, column);
+                        lexerErrors ~= text("未知字符: '", c, "'");
+                        advance();
+                        break;
                 }
             }
+        }
+        if (lexerErrors.length > 0)
+        {
+            throw new LexerException(text("词法错误: ", lexerErrors.join("; ")), line, column);
         }
         tokens ~= makeToken(TokenType.tokEOF, "");
         return tokens;
     }
+
+private:
+    string[] lexerErrors;
 }
 
 unittest

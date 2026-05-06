@@ -686,7 +686,17 @@ public:
             }
             case OpCode.PROP_GET:
             {
+                string fieldName = program.structFieldNames[cast(size_t)instr.arg1];
                 auto sv = stack[sp - 1];
+                auto s = sv.asStruct();
+                if (s && fieldName in s.fields)
+                {
+                    push(s.fields[fieldName]);
+                }
+                else
+                {
+                    errorOut(text("属性不存在: ", fieldName));
+                }
                 break;
             }
 
@@ -821,10 +831,13 @@ public:
         size_t bp = locals.length;
         locals.length = bp + funcInfo.numLocals;
 
-        for (ptrdiff_t i = funcInfo.numParams - 1; i >= 0; i--)
+        if (funcInfo.numParams > 0)
         {
-            auto arg = pop_();
-            locals[bp + i] = arg;
+            for (ptrdiff_t i = funcInfo.numParams - 1; i >= 0; i--)
+            {
+                auto arg = pop_();
+                locals[bp + i] = arg;
+            }
         }
 
         CallFrame frame;
@@ -896,8 +909,7 @@ public:
     {
         if (sp == 0)
         {
-            errorOut("栈下溢");
-            return Value.makeNull();
+            throw new VMException("栈下溢");
         }
         sp--;
         return stack[sp];
@@ -932,6 +944,27 @@ public:
 
     Value compare(Value a, Value b, string op)
     {
+        bool isStrCompare = (a.type >= PValueType.vtString && a.type <= PValueType.vtDstring)
+                         || (b.type >= PValueType.vtString && b.type <= PValueType.vtDstring);
+
+        if (isStrCompare)
+        {
+            import std.algorithm.comparison : cmp;
+            int c = cmp(a.toString(), b.toString());
+            bool result;
+            switch (op)
+            {
+                case "==": result = (c == 0); break;
+                case "!=": result = (c != 0); break;
+                case "<":  result = (c < 0); break;
+                case "<=": result = (c <= 0); break;
+                case ">":  result = (c > 0); break;
+                case ">=": result = (c >= 0); break;
+                default:   result = false; break;
+            }
+            return Value.makeBool(result);
+        }
+
         long ai = a.asInteger();
         long bi = b.asInteger();
 
@@ -954,6 +987,11 @@ public:
     {
         status = VMStatus.error_;
         lastError = msg;
+    }
+
+    void setGlobal(string name, Value val)
+    {
+        globals[name] = val;
     }
 
     VMStatus getStatus() const

@@ -230,7 +230,7 @@ public:
             auto program = compileModule(source);
             auto handle = new ModHandle("<script>");
             handle.program = program;
-            handle.entryPoint = 0;
+            handle.entryPoint = size_t.max;
 
             foreach (ref f; program.functions)
             {
@@ -241,7 +241,7 @@ public:
                 }
             }
 
-            if (handle.entryPoint == 0 && program.functions.length > 0)
+            if (handle.entryPoint == size_t.max && program.functions.length > 0)
             {
                 handle.entryPoint = program.functions[0].entryPoint;
             }
@@ -282,7 +282,7 @@ public:
             auto program = compileModule(source);
             auto handle = new ModHandle("<script>");
             handle.program = program;
-            handle.entryPoint = 0;
+            handle.entryPoint = size_t.max;
 
             foreach (ref f; program.functions)
             {
@@ -293,15 +293,12 @@ public:
                 }
             }
 
-            if (handle.entryPoint == 0 && program.functions.length > 0)
+            if (handle.entryPoint == size_t.max && program.functions.length > 0)
             {
                 handle.entryPoint = program.functions[0].entryPoint;
             }
 
-            vm.loadProgram(handle.program);
-            foreach (i, entry; hostFuncEntries)
-                vm.registerHostFunction(i, entry.func);
-            return vm.execute(handle.entryPoint);
+            return executeModule(handle);
         }
         catch (Exception e)
         {
@@ -397,6 +394,7 @@ public:
      */
     void unloadScript(ModHandle handle)
     {
+        vm.loadProgram(BytecodeProgram.init);
     }
 
     /**

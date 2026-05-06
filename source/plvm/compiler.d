@@ -176,7 +176,7 @@ private:
     {
         if (node is null) return;
 
-        switch (node.nodeType)
+        final switch (node.nodeType)
         {
             case AstNodeType.LiteralExpr:
                 compileLiteral(cast(LiteralExprNode)node);
@@ -214,7 +214,34 @@ private:
             case AstNodeType.ArrayLiteralExpr:
                 compileArrayLiteral(cast(ArrayLiteralExprNode)node);
                 break;
-            default:
+            case AstNodeType.ArrayInitExpr:
+                throw new CompileException("不支持数组初始化作为表达式", node.line, node.column);
+            case AstNodeType.LambdaExpr:
+                throw new CompileException("不支持 lambda 表达式作为值", node.line, node.column);
+            case AstNodeType.FunctionType:
+                throw new CompileException("不支持函数类型作为表达式", node.line, node.column);
+            case AstNodeType.DelegateType:
+                throw new CompileException("不支持委托类型作为表达式", node.line, node.column);
+            case AstNodeType.VarDecl:
+            case AstNodeType.ExprStmt:
+            case AstNodeType.ReturnStmt:
+            case AstNodeType.IfStmt:
+            case AstNodeType.WhileStmt:
+            case AstNodeType.DoWhileStmt:
+            case AstNodeType.ForStmt:
+            case AstNodeType.ForeachStmt:
+            case AstNodeType.SwitchStmt:
+            case AstNodeType.CaseStmt:
+            case AstNodeType.DefaultStmt:
+            case AstNodeType.BreakStmt:
+            case AstNodeType.ContinueStmt:
+            case AstNodeType.BlockStmt:
+            case AstNodeType.FunctionDecl:
+            case AstNodeType.StructDecl:
+            case AstNodeType.EnumDecl:
+            case AstNodeType.EnumMember:
+            case AstNodeType.ImportDecl:
+            case AstNodeType.Program:
                 throw new CompileException(text("不支持编译表达式类型: ", cast(int)node.nodeType), node.line, node.column);
         }
     }
@@ -638,6 +665,12 @@ private:
         else if (opChar == "*") program.emit(Instruction.mul_(line));
         else if (opChar == "/") program.emit(Instruction.div_(line));
         else if (opChar == "%") program.emit(Instruction.mod_(line));
+        else if (opChar == "~") program.emit(Instruction.add_(line));
+        else if (opChar == "&") program.emit(Instruction.bitAnd(line));
+        else if (opChar == "|") program.emit(Instruction.bitOr(line));
+        else if (opChar == "^") program.emit(Instruction.bitXor(line));
+        else if (opChar == "<<") program.emit(Instruction.shl_(line));
+        else if (opChar == ">>") program.emit(Instruction.shr_(line));
     }
 
     void compileArrayLiteral(ArrayLiteralExprNode node)
@@ -682,7 +715,7 @@ private:
     {
         if (node is null) return;
 
-        switch (node.nodeType)
+        final switch (node.nodeType)
         {
             case AstNodeType.VarDecl:
                 compileVarDecl(cast(VarDeclNode)node);
@@ -723,7 +756,36 @@ private:
             case AstNodeType.BlockStmt:
                 compileBlock(cast(BlockStmtNode)node);
                 break;
-            default:
+            case AstNodeType.FunctionDecl:
+                throw new CompileException("不支持函数嵌套声明", node.line, node.column);
+            case AstNodeType.CaseStmt:
+                throw new CompileException("case 语句不在 switch 中", node.line, node.column);
+            case AstNodeType.DefaultStmt:
+                throw new CompileException("default 语句不在 switch 中", node.line, node.column);
+            case AstNodeType.StructDecl:
+                throw new CompileException("不支持结构体声明作为语句", node.line, node.column);
+            case AstNodeType.EnumDecl:
+                throw new CompileException("不支持枚举声明作为语句", node.line, node.column);
+            case AstNodeType.EnumMember:
+                throw new CompileException("不支持枚举成员作为语句", node.line, node.column);
+            case AstNodeType.ImportDecl:
+                throw new CompileException("不支持导入声明作为语句", node.line, node.column);
+            case AstNodeType.LiteralExpr:
+            case AstNodeType.IdentifierExpr:
+            case AstNodeType.BinaryExpr:
+            case AstNodeType.UnaryExpr:
+            case AstNodeType.CallExpr:
+            case AstNodeType.IndexExpr:
+            case AstNodeType.MemberAccessExpr:
+            case AstNodeType.TernaryExpr:
+            case AstNodeType.PostfixExpr:
+            case AstNodeType.CastExpr:
+            case AstNodeType.ArrayLiteralExpr:
+            case AstNodeType.ArrayInitExpr:
+            case AstNodeType.LambdaExpr:
+            case AstNodeType.FunctionType:
+            case AstNodeType.DelegateType:
+            case AstNodeType.Program:
                 throw new CompileException(text("不支持的语句类型: ", cast(int)node.nodeType), node.line, node.column);
         }
     }
