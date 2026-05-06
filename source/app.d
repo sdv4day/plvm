@@ -986,6 +986,96 @@ int testSCOrT()  { if (true || expensive()) return 1; return 0; }
     }
 
     // ===================================================================
+    // 二十、宿主函数结构体参数测试
+    // ===================================================================
+    writeln("── 二十、宿主函数结构体参数测试 ──");
+    {
+        static struct Point { int x; int y; }
+        static struct Rect { int w; int h; }
+
+        static int hostSumPoint(Point p) { return p.x + p.y; }
+        static int hostRectArea(Rect r) { return r.w * r.h; }
+
+        auto plvm = new Plvm();
+        plvm.registerStruct!Point("Point");
+        plvm.registerStruct!Rect("Rect");
+        plvm.registerFunction!hostSumPoint("hostSumPoint");
+        plvm.registerFunction!hostRectArea("hostRectArea");
+
+        {
+            auto result = plvm.callOnce(
+                "struct Point { int x; int y; } " ~
+                "int main() { Point p; p.x = 10; p.y = 20; return hostSumPoint(p); }", "main");
+            assertTest(result.asInteger(), 30, "结构体作为宿主函数参数 (Point)");
+        }
+        {
+            auto result = plvm.callOnce(
+                "struct Rect { int w; int h; } " ~
+                "int main() { Rect r; r.w = 5; r.h = 8; return hostRectArea(r); }", "main");
+            assertTest(result.asInteger(), 40, "结构体作为宿主函数参数 (Rect)");
+        }
+    }
+
+    // ===================================================================
+    // 二十一、宿主函数数组参数测试
+    // ===================================================================
+    writeln("── 二十一、宿主函数数组参数测试 ──");
+    {
+        static int hostSumArray(int[] arr)
+        {
+            int s;
+            foreach (v; arr) s += v;
+            return s;
+        }
+
+        static long hostStringArrayLen(string[] arr)
+        {
+            return arr.length;
+        }
+
+        auto plvm = new Plvm();
+        plvm.registerFunction!hostSumArray("hostSumArray");
+        plvm.registerFunction!hostStringArrayLen("hostStringArrayLen");
+
+        {
+            auto result = plvm.callOnce(
+                "int main() { int[] arr = [1, 2, 3, 4, 5]; return hostSumArray(arr); }", "main");
+            assertTest(result.asInteger(), 15, "数组作为宿主函数参数 (int[])");
+        }
+        {
+            auto result = plvm.callOnce(
+                "long main() { string[] arr = [\"hello\", \"world\"]; return hostStringArrayLen(arr); }", "main");
+            assertTest(result.asInteger(), 2, "数组作为宿主函数参数 (string[])");
+        }
+    }
+
+    // ===================================================================
+    // 二十二、宿主函数混合参数测试
+    // ===================================================================
+    writeln("── 二十二、宿主函数混合参数测试 ──");
+    {
+        static struct Point { int x; int y; }
+
+        static int hostMixed(int factor, Point p, string[] labels)
+        {
+            return factor * (p.x + p.y) + cast(int)labels.length;
+        }
+
+        auto plvm = new Plvm();
+        plvm.registerStruct!Point("Point");
+        plvm.registerFunction!hostMixed("hostMixed");
+
+        {
+            auto result = plvm.callOnce(
+                "struct Point { int x; int y; } " ~
+                "int main() { Point p; p.x = 3; p.y = 4; " ~
+                "string[] labels = [\"a\", \"b\"]; " ~
+                "return hostMixed(10, p, labels); }", "main");
+            assertTest(result.asInteger(), 72, "混合参数: int + struct + string[]");
+        }
+    }
+
+    // ===================================================================
     // 测试 executeModule 和 executeModuleWithEntry
     // ===================================================================
     writeln("\n=== 测试 executeModule 和 executeModuleWithEntry ===");

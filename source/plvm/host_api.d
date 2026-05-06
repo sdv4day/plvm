@@ -40,7 +40,7 @@ string typeToPlvmTypeName(T)()
 /**
  * 将 D 值转换为 PLVM 值
  *
- * 支持基本类型、字符串和 void。
+ * 支持基本类型、字符串、结构体、动态数组（字符串除外）。
  *
  * Params:
  *   T = D 值类型
@@ -53,6 +53,31 @@ Value valueFromD(T)(T val)
     alias UT = Unqual!T;
     static if (is(UT == void))
         return Value.makeNull();
+    else static if (is(UT == struct))
+    {
+        Value[string] fields;
+        static if (__traits(hasMember, UT, "tupleof"))
+        {
+            import std.traits : FieldNameTuple;
+            static foreach (i, fieldName; FieldNameTuple!UT)
+            {
+                fields[fieldName] = valueFromD!(typeof(UT.tupleof[i]))(__traits(getMember, val, fieldName));
+            }
+        }
+        return Value.makeStruct(UT.stringof, fields);
+    }
+    else static if (isDynamicArray!UT && !isSomeString!UT)
+    {
+        import std.range : ElementType;
+        alias ElemType = ElementType!UT;
+        Value[] arr;
+        arr.reserve(val.length);
+        foreach (ref elem; val)
+        {
+            arr ~= valueFromD!ElemType(elem);
+        }
+        return Value.makeArray(arr);
+    }
     else
         return Value.make!UT(val);
 }
@@ -60,7 +85,7 @@ Value valueFromD(T)(T val)
 /**
  * 将 PLVM 值转换为 D 值
  *
- * 支持基本类型和字符串。
+ * 支持基本类型、字符串、结构体和动态数组。
  *
  * Params:
  *   T = 目标 D 类型
@@ -82,6 +107,36 @@ T valueToD(T)(Value val)
         return cast(T)to!wstring(val.asString());
     else static if (is(UT == dstring))
         return cast(T)to!dstring(val.asString());
+    else static if (isDynamicArray!UT && !isSomeString!UT)
+    {
+        import std.range : ElementType;
+        alias ElemType = ElementType!UT;
+        auto arr = val.asArray();
+        UT result;
+        result.length = arr.length;
+        foreach (i; 0 .. arr.length)
+        {
+            result[i] = valueToD!ElemType(arr[i]);
+        }
+        return result;
+    }
+    else static if (is(UT == struct))
+    {
+        auto sv = val.asStruct();
+        UT result;
+        static if (__traits(hasMember, UT, "tupleof"))
+        {
+            import std.traits : FieldNameTuple;
+            static foreach (i, fieldName; FieldNameTuple!UT)
+            {
+                if (auto p = fieldName in sv.fields)
+                {
+                    __traits(getMember, result, fieldName) = valueToD!(typeof(UT.tupleof[i]))(*p);
+                }
+            }
+        }
+        return result;
+    }
     else
     {
         T result;
@@ -437,4 +492,162 @@ unittest
     Value[] args = [Value.makeInt(3)];
     auto result = wrapper(args);
     assert(result.asInteger() == 20);
+}
+
+/**
+ * valueFromD / valueToD 结构体转换单元测试
+ */
+unittest
+{
+    struct Point { int x; int y; }
+
+    auto pt = Point(3, 4);
+    auto v = valueFromD(pt);
+    assert(v.type == PValueType.vtStruct);
+    assert(v.asStruct().typeName == "Point");
+    assert(v.asStruct().fields["x"].asInteger() == 3);
+    assert(v.asStruct().fields["y"].asInteger() == 4);
+
+    auto pt2 = valueToD!Point(v);
+    assert(pt2.x == 3);
+    assert(pt2.y == 4);
+}
+
+/**
+ * valueFromD / valueToD 数组转换单元测试
+ */
+unittest
+{
+    int[] arr = [1, 2, 3, 4, 5];
+    auto v = valueFromD(arr);
+    assert(v.type == PValueType.vtArray);
+    assert(v.asArray().length == 5);
+    assert(v.asArray()[0].asInteger() == 1);
+    assert(v.asArray()[4].asInteger() == 5);
+
+    auto arr2 = valueToD!(int[])(v);
+    assert(arr2.length == 5);
+    assert(arr2 == [1, 2, 3, 4, 5]);
+}
+
+/**
+ * valueFromD / valueToD 字符串数组转换单元测试
+ */
+unittest
+{
+    string[] arr = ["a", "b", "c"];
+    auto v = valueFromD(arr);
+    assert(v.type == PValueType.vtArray);
+    assert(v.asArray().length == 3);
+    assert(v.asArray()[0].asString() == "a");
+    assert(v.asArray()[1].asString() == "b");
+    assert(v.asArray()[2].asString() == "c");
+
+    auto arr2 = valueToD!(string[])(v);
+    assert(arr2.length == 3);
+    assert(arr2 == ["a", "b", "c"]);
+}
+
+/**
+ * valueFromD / valueToD 嵌套结构体转换单元测试
+ */
+unittest
+{
+    struct Inner { int a; int b; }
+    struct Outer { Inner inner; string label; }
+
+    auto outerVal = Outer(Inner(10, 20), "test");
+    auto v = valueFromD(outerVal);
+    assert(v.type == PValueType.vtStruct);
+    assert(v.asStruct().typeName == "Outer");
+    assert(v.asStruct().fields["label"].asString() == "test");
+
+    auto innerV = v.asStruct().fields["inner"];
+    assert(innerV.type == PValueType.vtStruct);
+    assert(innerV.asStruct().fields["a"].asInteger() == 10);
+    assert(innerV.asStruct().fields["b"].asInteger() == 20);
+
+    auto outerVal2 = valueToD!Outer(v);
+    assert(outerVal2.inner.a == 10);
+    assert(outerVal2.inner.b == 20);
+    assert(outerVal2.label == "test");
+}
+
+/**
+ * valueFromD / valueToD 结构体数组混合转换单元测试
+ */
+unittest
+{
+    struct Point { int x; int y; }
+
+    Point[] pts = [Point(1, 2), Point(3, 4)];
+    auto v = valueFromD(pts);
+    assert(v.type == PValueType.vtArray);
+    assert(v.asArray().length == 2);
+
+    auto pts2 = valueToD!(Point[])(v);
+    assert(pts2.length == 2);
+    assert(pts2[0].x == 1);
+    assert(pts2[0].y == 2);
+    assert(pts2[1].x == 3);
+    assert(pts2[1].y == 4);
+}
+
+/**
+ * 宿主函数包装器结构体参数单元测试
+ */
+unittest
+{
+    struct Point { int x; int y; }
+
+    static int sumPoint(Point p)
+    {
+        return p.x + p.y;
+    }
+
+    auto wrapper = createHostFunctionWrapper!(sumPoint)();
+    Value[] args = [Value.makeStruct("Point", ["x": Value.makeInt(3), "y": Value.makeInt(4)])];
+    auto result = wrapper(args);
+    assert(result.asInteger() == 7);
+}
+
+/**
+ * 宿主函数包装器数组参数单元测试
+ */
+unittest
+{
+    static int sumArray(int[] arr)
+    {
+        int sum;
+        foreach (v; arr)
+            sum += v;
+        return sum;
+    }
+
+    auto wrapper = createHostFunctionWrapper!(sumArray)();
+    Value[] args = [Value.makeArray([Value.makeInt(1), Value.makeInt(2), Value.makeInt(3), Value.makeInt(4), Value.makeInt(5)])];
+    auto result = wrapper(args);
+    assert(result.asInteger() == 15);
+}
+
+/**
+ * 宿主函数包装器混合参数单元测试
+ */
+unittest
+{
+    struct Point { int x; int y; }
+
+    static int mixedTest(int factor, Point p, string[] labels)
+    {
+        return factor * (p.x + p.y) + cast(int)labels.length;
+    }
+
+    auto wrapper = createHostFunctionWrapper!(mixedTest)();
+    Value[] args = [
+        Value.makeInt(10),
+        Value.makeStruct("Point", ["x": Value.makeInt(3), "y": Value.makeInt(4)]),
+        Value.makeArray([Value.makeString("a"), Value.makeString("b")])
+    ];
+    auto result = wrapper(args);
+    assert(result.asInteger() == 72);
 }
