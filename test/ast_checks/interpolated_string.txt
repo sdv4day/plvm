@@ -1,0 +1,5 @@
+//interpolatedString[@startQuote='i"']
+//interpolatedString[@endQuote='"']
+//interpolatedString/text[text()='Hello name, you have $']
+//interpolatedString/text[text()=' in your account right now']
+//interpolatedString/expression/unaryExpression

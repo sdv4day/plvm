@@ -288,7 +288,7 @@ public:
  * 创建宿主函数包装器
  *
  * 将 D 函数包装为 PLVM 可调用的委托。
- * 支持 0-4 个参数的函数。
+ * 支持任意数量参数的函数。
  *
  * Params:
  *   Func = 要包装的函数
@@ -300,6 +300,7 @@ template createHostFunctionWrapper(alias Func)
     auto createHostFunctionWrapper()
     {
         import std.functional : toDelegate;
+        import std.conv : text;
 
         alias RT = ReturnType!Func;
         alias PT = Parameters!Func;
@@ -311,48 +312,36 @@ template createHostFunctionWrapper(alias Func)
                 return valueFromD(result);
             });
         }
-        else static if (PT.length == 1)
-        {
-            return toDelegate((Value[] args) {
-                auto a0 = valueToD!(PT[0])(args[0]);
-                auto result = Func(a0);
-                return valueFromD(result);
-            });
-        }
-        else static if (PT.length == 2)
-        {
-            return toDelegate((Value[] args) {
-                auto a0 = valueToD!(PT[0])(args[0]);
-                auto a1 = valueToD!(PT[1])(args[1]);
-                auto result = Func(a0, a1);
-                return valueFromD(result);
-            });
-        }
-        else static if (PT.length == 3)
-        {
-            return toDelegate((Value[] args) {
-                auto a0 = valueToD!(PT[0])(args[0]);
-                auto a1 = valueToD!(PT[1])(args[1]);
-                auto a2 = valueToD!(PT[2])(args[2]);
-                auto result = Func(a0, a1, a2);
-                return valueFromD(result);
-            });
-        }
-        else static if (PT.length == 4)
-        {
-            return toDelegate((Value[] args) {
-                auto a0 = valueToD!(PT[0])(args[0]);
-                auto a1 = valueToD!(PT[1])(args[1]);
-                auto a2 = valueToD!(PT[2])(args[2]);
-                auto a3 = valueToD!(PT[3])(args[3]);
-                auto result = Func(a0, a1, a2, a3);
-                return valueFromD(result);
-            });
-        }
         else
         {
+            static string buildArgDecls()
+            {
+                string result;
+                static foreach (i, T; PT)
+                {
+                    result ~= text("auto a", i, " = valueToD!(PT[", i, "])(args[", i, "]); ");
+                }
+                return result;
+            }
+
+            static string buildCallArgs()
+            {
+                string result;
+                static foreach (i; 0 .. PT.length)
+                {
+                    static if (i > 0) result ~= ", ";
+                    result ~= text("a", i);
+                }
+                return result;
+            }
+
+            enum argDecls = buildArgDecls();
+            enum callArgs = buildCallArgs();
+
             return toDelegate((Value[] args) {
-                return Value.makeNull();
+                mixin(argDecls);
+                auto result = mixin("Func(" ~ callArgs ~ ")");
+                return valueFromD(result);
             });
         }
     }
@@ -368,4 +357,84 @@ unittest
     Value[] args = [Value.makeInt(3), Value.makeInt(4)];
     auto result = wrapper(args);
     assert(result.asInteger() == 7);
+}
+
+/**
+ * 宿主函数包装器 delegate 类型单元测试
+ */
+unittest
+{
+    int captured = 100;
+
+    int delegate(int, int) dg = delegate(int a, int b) {
+        return captured + a + b;
+    };
+
+    auto wrapper = createHostFunctionWrapper!(dg)();
+    Value[] args = [Value.makeInt(3), Value.makeInt(4)];
+    auto result = wrapper(args);
+    assert(result.asInteger() == 107);
+}
+
+/**
+ * 宿主函数包装器匿名 delegate 单元测试
+ */
+unittest
+{
+    int captured = 50;
+
+    auto wrapper = createHostFunctionWrapper!(delegate int(int a, int b) {
+        return captured * a + b;
+    })();
+    Value[] args = [Value.makeInt(2), Value.makeInt(10)];
+    auto result = wrapper(args);
+    assert(result.asInteger() == 110);
+}
+
+/**
+ * 宿主函数包装器函数指针单元测试
+ */
+unittest
+{
+    static int multiply(int a, int b) { return a * b; }
+    int function(int, int) fp = &multiply;
+
+    auto wrapper = createHostFunctionWrapper!(fp)();
+    Value[] args = [Value.makeInt(3), Value.makeInt(4)];
+    auto result = wrapper(args);
+    assert(result.asInteger() == 12);
+}
+
+/**
+ * 宿主函数包装器无参数 delegate 单元测试
+ */
+unittest
+{
+    int delegate() dg = delegate() {
+        return 42;
+    };
+
+    auto wrapper = createHostFunctionWrapper!(dg)();
+    Value[] args = [];
+    auto result = wrapper(args);
+    assert(result.asInteger() == 42);
+}
+
+/**
+ * 宿主函数包装器嵌套 delegate 单元测试
+ */
+unittest
+{
+    int outerVar = 10;
+    int middleVar = 5;
+
+    int delegate(int) dg = delegate(int x) {
+        int innerVar = 2;
+        return outerVar + middleVar + innerVar + x;
+    };
+
+    auto wrapper = createHostFunctionWrapper!(dg)();
+    Value[] args = [Value.makeInt(3)];
+    auto result = wrapper(args);
+    assert(result.asInteger() == 20);
 }

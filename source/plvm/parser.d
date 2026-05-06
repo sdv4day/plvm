@@ -1,3 +1,13 @@
+/**
+ * PLVM 语法分析器模块
+ *
+ * 本模块实现语法分析，将词法单元序列转换为抽象语法树（AST）。
+ * 采用递归下降分析法。
+ *
+ * Copyright: Copyright (c) 2024, PLVM Authors
+ * License: MIT
+ * Authors: PLVM Team
+ */
 module plvm.parser;
 
 import plvm.token;
@@ -6,9 +16,24 @@ import plvm.lexer;
 import std.exception : enforce;
 import std.conv : text, to;
 
+/**
+ * 语法分析异常类
+ *
+ * 表示语法分析过程中的错误。
+ */
 class ParseException : Exception
 {
-    size_t line, column;
+    size_t line;    /// 错误行号
+    size_t column;  /// 错误列号
+
+    /**
+     * 构造语法分析异常
+     *
+     * Params:
+     *   msg = 错误消息
+     *   l = 行号
+     *   c = 列号
+     */
     this(string msg, size_t l, size_t c)
     {
         super(text("语法错误 (", l, ":", c, "): ", msg));
@@ -17,26 +42,34 @@ class ParseException : Exception
     }
 }
 
+/**
+ * 语法分析器类
+ *
+ * 将词法单元序列转换为 AST。
+ */
 class Parser
 {
 private:
-    Token[] tokens;
-    size_t current;
-    string[] registeredStructNames;
-    string[] registeredEnumNames;
-    string[string][string] enumMembers;
-    string[] registeredFuncNames;
+    Token[] tokens;                /// 词法单元列表
+    size_t current;                /// 当前位置
+    string[] registeredStructNames; /// 已注册结构体名称
+    string[] registeredEnumNames;   /// 已注册枚举名称
+    string[string][string] enumMembers; /// 枚举成员映射
+    string[] registeredFuncNames;   /// 已注册函数名称
 
+    /// 检查是否到达文件末尾
     bool isEOF()
     {
         return tokens[current].type == TokenType.tokEOF;
     }
 
+    /// 查看当前词法单元
     Token peek()
     {
         return tokens[current];
     }
 
+    /// 查看下一个词法单元
     Token peekNext()
     {
         if (current + 1 >= tokens.length)
@@ -44,23 +77,27 @@ private:
         return tokens[current + 1];
     }
 
+    /// 获取上一个词法单元
     Token previous()
     {
         return tokens[current - 1];
     }
 
+    /// 前进一个词法单元
     Token advance()
     {
         if (!isEOF()) current++;
         return previous();
     }
 
+    /// 检查当前词法单元类型
     bool check(TokenType t)
     {
         if (isEOF()) return false;
         return peek().type == t;
     }
 
+    /// 匹配词法单元类型
     bool match_(TokenType t)
     {
         if (check(t))
@@ -71,6 +108,17 @@ private:
         return false;
     }
 
+    /**
+     * 消费指定类型的词法单元
+     *
+     * Params:
+     *   t = 期望的词法单元类型
+     *   msg = 错误消息
+     *
+     * Returns: 消费的词法单元
+     *
+     * Throws: 如果当前词法单元类型不匹配，抛出 ParseException
+     */
     Token consume(TokenType t, string msg)
     {
         if (check(t))

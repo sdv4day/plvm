@@ -1,3 +1,16 @@
+/**
+ * PLVM 虚拟机模块
+ *
+ * 本模块实现 PLVM 的字节码虚拟机，包括：
+ * - 指令执行
+ * - 函数调用
+ * - 栈管理
+ * - 宿主函数调用
+ *
+ * Copyright: Copyright (c) 2024, PLVM Authors
+ * License: MIT
+ * Authors: PLVM Team
+ */
 module plvm.vm;
 
 import plvm.value;
@@ -6,16 +19,32 @@ import plvm.compiler;
 import std.exception : enforce;
 import std.conv : text, to;
 
+/**
+ * 虚拟机状态枚举
+ */
 enum VMStatus : ubyte
 {
-    ok,
-    halted,
-    error_
+    ok,       /// 正常运行
+    halted,   /// 已停止
+    error_    /// 错误
 }
 
+/**
+ * 虚拟机异常类
+ *
+ * 表示虚拟机执行过程中的错误。
+ */
 class VMException : Exception
 {
-    size_t line;
+    size_t line;  /// 错误行号
+
+    /**
+     * 构造虚拟机异常
+     *
+     * Params:
+     *   msg = 错误消息
+     *   ln = 行号
+     */
     this(string msg, size_t ln = 0)
     {
         super(msg);
@@ -23,46 +52,61 @@ class VMException : Exception
     }
 }
 
+/**
+ * 调用帧结构
+ *
+ * 存储函数调用的上下文信息。
+ */
 struct CallFrame
 {
-    size_t returnAddress;
-    size_t bp;
-    size_t spStart;
-    size_t numLocals;
-    string functionName;
+    size_t returnAddress;   /// 返回地址
+    size_t bp;              /// 基址指针
+    size_t spStart;         /// 栈指针起始位置
+    size_t numLocals;       /// 局部变量数量
+    string functionName;    /// 函数名
 }
 
+/// 宿主函数类型别名
 alias HostFunction = Value delegate(Value[] args);
 
+/**
+ * 虚拟机类
+ *
+ * 执行字节码程序的核心引擎。
+ */
 class VirtualMachine
 {
 private:
-    Value[] stack;
-    size_t sp;
-    CallFrame[] callStack;
-    BytecodeProgram program;
-    size_t ip;
-    bool halted;
-    VMStatus status;
-    string lastError;
+    Value[] stack;               /// 数据栈
+    size_t sp;                   /// 栈指针
+    CallFrame[] callStack;       /// 调用栈
+    BytecodeProgram program;     /// 字节码程序
+    size_t ip;                   /// 指令指针
+    bool halted;                 /// 是否已停止
+    VMStatus status;             /// 虚拟机状态
+    string lastError;            /// 最后的错误消息
 
-    Value[string] globals;
-    Value[] locals;
+    Value[string] globals;       /// 全局变量
+    Value[] locals;              /// 局部变量
 
-    HostFunction[size_t] hostFunctions;
-    size_t maxSteps = 10_000_000;
-    size_t stepCount;
+    HostFunction[size_t] hostFunctions;  /// 宿主函数映射
+    size_t maxSteps = 10_000_000;        /// 最大步数限制
+    size_t stepCount;                    /// 当前步数
 
+    /// foreach 状态结构
     struct ForeachState
     {
-        size_t arrayIndex;
-        Value arrayVal;
+        size_t arrayIndex;  /// 数组索引
+        Value arrayVal;     /// 数组值
     }
-    ForeachState[] foreachStack;
+    ForeachState[] foreachStack;  /// foreach 状态栈
 
-    Value returnValue;
+    Value returnValue;  /// 返回值
 
 public:
+    /**
+     * 构造虚拟机
+     */
     this()
     {
         stack.length = 65536;
@@ -72,6 +116,12 @@ public:
         status = VMStatus.ok;
     }
 
+    /**
+     * 加载字节码程序
+     *
+     * Params:
+     *   prog = 字节码程序
+     */
     void loadProgram(BytecodeProgram prog)
     {
         program = prog;
@@ -86,16 +136,34 @@ public:
         stepCount = 0;
     }
 
+    /**
+     * 注册宿主函数
+     *
+     * Params:
+     *   index = 函数索引
+     *   func = 宿主函数委托
+     */
     void registerHostFunction(size_t index, HostFunction func)
     {
         hostFunctions[index] = func;
     }
 
+    /**
+     * 设置最大执行步数
+     *
+     * Params:
+     *   steps = 最大步数
+     */
     void setMaxSteps(size_t steps)
     {
         maxSteps = steps;
     }
 
+    /**
+     * 执行字节码程序
+     *
+     * Returns: 程序返回值
+     */
     Value execute()
     {
         return execute(0);
@@ -130,6 +198,80 @@ public:
             frame.functionName = "<entry>";
             callStack ~= frame;
         }
+
+        while (!halted && status == VMStatus.ok && ip < program.instructions.length)
+        {
+            stepCount++;
+            if (stepCount > maxSteps)
+            {
+                errorOut("执行步数超过限制");
+                break;
+            }
+
+            auto instr = program.instructions[ip];
+            ip++;
+
+            try
+            {
+                executeInstruction(instr);
+            }
+            catch (Exception e)
+            {
+                errorOut(text("运行时错误 (行 ", instr.line, "): ", e.msg));
+            }
+        }
+
+        if (status == VMStatus.error_)
+            throw new VMException(lastError);
+
+        if (stack.length > 0 && sp > 0)
+            returnValue = stack[sp - 1];
+
+        return returnValue;
+    }
+
+    /**
+     * 带参数执行函数
+     *
+     * Params:
+     *   entryPoint = 入口点
+     *   args = 参数值数组
+     *
+     * Returns: 函数返回值
+     */
+    Value executeWithArgs(size_t entryPoint, Value[] args)
+    {
+        ip = entryPoint;
+        halted = false;
+        status = VMStatus.ok;
+        returnValue = Value.makeNull();
+
+        size_t numLocals = 0;
+        size_t numParams = 0;
+        foreach (ref f; program.functions)
+        {
+            if (f.entryPoint == entryPoint)
+            {
+                numLocals = f.numLocals;
+                numParams = f.numParams;
+                break;
+            }
+        }
+
+        locals.length = numLocals;
+
+        for (size_t i = 0; i < args.length && i < numParams; i++)
+        {
+            locals[i] = args[i];
+        }
+
+        CallFrame frame;
+        frame.returnAddress = 0;
+        frame.bp = 0;
+        frame.spStart = sp;
+        frame.numLocals = numLocals;
+        frame.functionName = "<entry>";
+        callStack ~= frame;
 
         while (!halted && status == VMStatus.ok && ip < program.instructions.length)
         {

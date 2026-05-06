@@ -1,12 +1,36 @@
+/**
+ * PLVM 词法分析器模块
+ *
+ * 本模块实现源代码的词法分析，将源代码字符串转换为词法单元（Token）序列。
+ *
+ * Copyright: Copyright (c) 2024, PLVM Authors
+ * License: MIT
+ * Authors: PLVM Team
+ */
 module plvm.lexer;
 
 import plvm.token;
 import std.exception : enforce;
 import std.conv : text;
 
+/**
+ * 词法分析异常类
+ *
+ * 表示词法分析过程中的错误。
+ */
 class LexerException : Exception
 {
-    size_t line, column;
+    size_t line;    /// 错误行号
+    size_t column;  /// 错误列号
+
+    /**
+     * 构造词法分析异常
+     *
+     * Params:
+     *   msg = 错误消息
+     *   l = 行号
+     *   c = 列号
+     */
     this(string msg, size_t l, size_t c)
     {
         super(text("词法错误 (", l, ":", c, "): ", msg));
@@ -15,33 +39,42 @@ class LexerException : Exception
     }
 }
 
+/**
+ * 词法分析器类
+ *
+ * 将源代码字符串转换为词法单元序列。
+ */
 class Lexer
 {
 private:
-    string source;
-    size_t pos;
-    size_t line;
-    size_t column;
-    Token[] tokens;
-    size_t fileIndex;
+    string source;      /// 源代码
+    size_t pos;         /// 当前位置
+    size_t line;        /// 当前行号
+    size_t column;      /// 当前列号
+    Token[] tokens;     /// 词法单元列表
+    size_t fileIndex;   /// 文件索引
 
+    /// 检查是否到达文件末尾
     bool isEOF() const pure nothrow @nogc @safe
     {
         return pos >= source.length;
     }
 
+    /// 查看当前字符
     char peek() const pure nothrow @nogc @safe
     {
         if (isEOF()) return '\0';
         return source[pos];
     }
 
+    /// 查看下一个字符
     char peekNext() const pure nothrow @nogc @safe
     {
         if (pos + 1 >= source.length) return '\0';
         return source[pos + 1];
     }
 
+    /// 前进一个字符
     char advance() nothrow @safe
     {
         if (isEOF()) return '\0';
@@ -56,6 +89,7 @@ private:
         return c;
     }
 
+    /// 匹配期望字符
     bool match_(char expected) nothrow @safe
     {
         if (isEOF() || peek() != expected) return false;
@@ -63,6 +97,7 @@ private:
         return true;
     }
 
+    /// 跳过空白字符和注释
     void skipWhitespace() nothrow @safe
     {
         while (!isEOF())

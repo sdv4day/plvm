@@ -1,3 +1,17 @@
+/**
+ * PLVM 编译器模块
+ *
+ * 本模块实现从 AST 到字节码的编译过程，包括：
+ * - 函数编译
+ * - 表达式编译
+ * - 语句编译
+ * - 控制流处理
+ * - 类型转换
+ *
+ * Copyright: Copyright (c) 2024, PLVM Authors
+ * License: MIT
+ * Authors: PLVM Team
+ */
 module plvm.compiler;
 
 import plvm.token;
@@ -8,9 +22,24 @@ import plvm.host_api : EnumValue;
 import std.exception : enforce;
 import std.conv : text, to;
 
+/**
+ * 编译异常类
+ *
+ * 表示编译过程中的错误。
+ */
 class CompileException : Exception
 {
-    size_t line, column;
+    size_t line;    /// 错误行号
+    size_t column;  /// 错误列号
+
+    /**
+     * 构造编译异常
+     *
+     * Params:
+     *   msg = 错误消息
+     *   l = 行号
+     *   c = 列号
+     */
     this(string msg, size_t l, size_t c)
     {
         super(text("编译错误 (", l, ":", c, "): ", msg));
@@ -19,54 +48,81 @@ class CompileException : Exception
     }
 }
 
+/**
+ * 可中断上下文结构
+ *
+ * 用于跟踪 break/continue 语句的跳转目标。
+ */
 struct BreakableContext
 {
-    size_t breakLabel;
-    size_t continueLabel;
-    size_t[] breakJumps;
-    size_t[] continueJumps;
-    bool isSwitch;
+    size_t breakLabel;         /// break 跳转标签
+    size_t continueLabel;      /// continue 跳转标签
+    size_t[] breakJumps;       /// break 跳转指令位置列表
+    size_t[] continueJumps;    /// continue 跳转指令位置列表
+    bool isSwitch;             /// 是否为 switch 语句
 }
 
+/**
+ * 编译器类
+ *
+ * 将 AST 编译为字节码程序。
+ */
 class Compiler
 {
 private:
-    BytecodeProgram program;
-    BreakableContext[] breakStack;
-    string currentFuncName;
-    FunctionInfo[] pendingFunctions;
-    FunctionDeclNode[] pendingFuncNodes;
-    bool isPassTwo;
-    size_t mainFuncEntry;
+    BytecodeProgram program;              /// 字节码程序
+    BreakableContext[] breakStack;        /// 可中断上下文栈
+    string currentFuncName;               /// 当前函数名
+    FunctionInfo[] pendingFunctions;      /// 待处理函数列表
+    FunctionDeclNode[] pendingFuncNodes;  /// 待处理函数节点列表
+    bool isPassTwo;                       /// 是否为第二遍扫描
+    size_t mainFuncEntry;                 /// main 函数入口点
 
-    size_t[string] localVarSlots;
-    size_t localVarCount;
+    size_t[string] localVarSlots;         /// 局部变量槽位映射
+    size_t localVarCount;                 /// 局部变量计数
 
-    string[] registeredStructNames;
-    string[string][string] enumMembers;
-    string[] registeredFuncNames;
-    string[long] registeredFuncIndices;
-    string[] registeredHostNames;
-    string[long] registeredHostIndices;
-    string[string] structFieldTypeMap;
+    string[] registeredStructNames;       /// 已注册结构体名称
+    string[string][string] enumMembers;   /// 枚举成员映射
+    string[] registeredFuncNames;         /// 已注册函数名称
+    string[long] registeredFuncIndices;   /// 函数索引映射
+    string[] registeredHostNames;         /// 已注册宿主函数名称
+    string[long] registeredHostIndices;   /// 宿主函数索引映射
+    string[string] structFieldTypeMap;    /// 结构体字段类型映射
 
-    string[string] localVarTypes;
-    string[string][string] structTypeFields;
+    string[string] localVarTypes;         /// 局部变量类型映射
+    string[string][string] structTypeFields; /// 结构体类型字段映射
 
-    EnumValue[] enumValues;
+    EnumValue[] enumValues;               /// 枚举值列表
 
+    /// 类型 ID 枚举
     enum TypeId : long
     {
-        TYPE_VOID = 0,
-        TYPE_BOOL = 1,
-        TYPE_BYTE = 2, TYPE_UBYTE = 3,
-        TYPE_SHORT = 4, TYPE_USHORT = 5,
-        TYPE_INT = 6, TYPE_UINT = 7,
-        TYPE_LONG = 8, TYPE_ULONG = 9,
-        TYPE_CHAR = 10, TYPE_WCHAR = 11, TYPE_DCHAR = 12,
-        TYPE_STRING = 13, TYPE_WSTRING = 14, TYPE_DSTRING = 15
+        TYPE_VOID = 0,      /// void 类型
+        TYPE_BOOL = 1,      /// bool 类型
+        TYPE_BYTE = 2,      /// byte 类型
+        TYPE_UBYTE = 3,     /// ubyte 类型
+        TYPE_SHORT = 4,     /// short 类型
+        TYPE_USHORT = 5,    /// ushort 类型
+        TYPE_INT = 6,       /// int 类型
+        TYPE_UINT = 7,      /// uint 类型
+        TYPE_LONG = 8,      /// long 类型
+        TYPE_ULONG = 9,     /// ulong 类型
+        TYPE_CHAR = 10,     /// char 类型
+        TYPE_WCHAR = 11,    /// wchar 类型
+        TYPE_DCHAR = 12,    /// dchar 类型
+        TYPE_STRING = 13,   /// string 类型
+        TYPE_WSTRING = 14,  /// wstring 类型
+        TYPE_DSTRING = 15   /// dstring 类型
     }
 
+    /**
+     * 将类型名转换为类型 ID
+     *
+     * Params:
+     *   t = 类型名
+     *
+     * Returns: 类型 ID，未知类型返回 -1
+     */
     long typeToTypeId(string t)
     {
         switch (t)
@@ -442,6 +498,13 @@ private:
 
     void compileMemberAccess(MemberAccessExprNode node)
     {
+        if (node.member == "length")
+        {
+            compileExpr(node.target);
+            program.emit(Instruction.arrayLen(node.line));
+            return;
+        }
+
         if (auto idNode = cast(IdentifierExprNode)node.target)
         {
             string combined = idNode.name ~ "." ~ node.member;
@@ -527,6 +590,28 @@ private:
                 compileExpr(node.value);
                 emitCompoundAssignOp(op, node.line);
                 program.emit(Instruction.structSet(cast(long)fieldIdx, node.line));
+            }
+            return;
+        }
+
+        if (auto ixNode = cast(IndexExprNode)node.target)
+        {
+            if (op == "=")
+            {
+                compileExpr(ixNode.target);
+                compileExpr(ixNode.index);
+                compileExpr(node.value);
+                program.emit(Instruction.arraySet(node.line));
+            }
+            else
+            {
+                compileExpr(ixNode.target);
+                compileExpr(ixNode.index);
+                program.emit(Instruction.dup_(node.line));
+                program.emit(Instruction.arrayGet(node.line));
+                compileExpr(node.value);
+                emitCompoundAssignOp(op, node.line);
+                program.emit(Instruction.arraySet(node.line));
             }
             return;
         }

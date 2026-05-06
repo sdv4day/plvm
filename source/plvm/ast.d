@@ -1,49 +1,107 @@
+/**
+ * PLVM 抽象语法树模块
+ *
+ * 本模块定义了 PLVM 的抽象语法树（AST）节点类型，包括：
+ * - 程序节点
+ * - 声明节点（变量、函数、结构体、枚举）
+ * - 语句节点（if、while、for、switch 等）
+ * - 表达式节点（字面量、二元、一元、调用等）
+ *
+ * Copyright: Copyright (c) 2024, PLVM Authors
+ * License: MIT
+ * Authors: PLVM Team
+ */
 module plvm.ast;
 
+/**
+ * AST 节点类型枚举
+ *
+ * 定义了所有可能的 AST 节点类型。
+ */
 enum AstNodeType : ubyte
 {
-    Program,
+    Program,        /// 程序
 
-    VarDecl, AssignStmt, ExprStmt,
-    ReturnStmt, IfStmt, WhileStmt, DoWhileStmt,
-    ForStmt, ForeachStmt, SwitchStmt, CaseStmt, DefaultStmt,
-    BreakStmt, ContinueStmt,
-    BlockStmt,
-    FunctionDecl,
+    VarDecl,        /// 变量声明
+    AssignStmt,     /// 赋值语句
+    ExprStmt,       /// 表达式语句
+    ReturnStmt,     /// 返回语句
+    IfStmt,         /// if 语句
+    WhileStmt,      /// while 语句
+    DoWhileStmt,    /// do-while 语句
+    ForStmt,        /// for 语句
+    ForeachStmt,    /// foreach 语句
+    SwitchStmt,     /// switch 语句
+    CaseStmt,       /// case 语句
+    DefaultStmt,    /// default 语句
+    BreakStmt,      /// break 语句
+    ContinueStmt,   /// continue 语句
+    BlockStmt,      /// 块语句
+    FunctionDecl,   /// 函数声明
 
-    LiteralExpr, IdentifierExpr, BinaryExpr,
-    UnaryExpr, CallExpr, IndexExpr,
-    MemberAccessExpr, TernaryExpr,
-    PostfixExpr, CastExpr,
-    ArrayLiteralExpr, ArrayInitExpr,
-    LambdaExpr,
-    FunctionType, DelegateType,
+    LiteralExpr,    /// 字面量表达式
+    IdentifierExpr, /// 标识符表达式
+    BinaryExpr,     /// 二元表达式
+    UnaryExpr,      /// 一元表达式
+    CallExpr,       /// 调用表达式
+    IndexExpr,      /// 索引表达式
+    MemberAccessExpr, /// 成员访问表达式
+    TernaryExpr,    /// 三元表达式
+    PostfixExpr,    /// 后缀表达式
+    CastExpr,       /// 类型转换表达式
+    ArrayLiteralExpr, /// 数组字面量表达式
+    ArrayInitExpr,  /// 数组初始化表达式
+    LambdaExpr,     /// lambda 表达式
+    FunctionType,   /// 函数类型
+    DelegateType,   /// 委托类型
 
-    StructDecl, EnumDecl,
-    EnumMember,
-    ImportDecl
+    StructDecl,     /// 结构体声明
+    EnumDecl,       /// 枚举声明
+    EnumMember,     /// 枚举成员
+    ImportDecl      /// 导入声明
 }
 
+/**
+ * 值类别枚举
+ */
 enum ValueCategory
 {
-    LValue, RValue
+    LValue,  /// 左值
+    RValue   /// 右值
 }
 
+/**
+ * AST 节点基类
+ *
+ * 所有 AST 节点的基类。
+ */
 class AstNode
 {
-    AstNodeType nodeType;
-    size_t line, column;
-    string filePath;
+    AstNodeType nodeType;  /// 节点类型
+    size_t line;           /// 行号
+    size_t column;         /// 列号
+    string filePath;       /// 文件路径
 
+    /**
+     * 构造 AST 节点
+     *
+     * Params:
+     *   t = 节点类型
+     */
     this(AstNodeType t)
     {
         nodeType = t;
     }
 }
 
+/**
+ * 程序节点
+ *
+ * 表示整个程序，包含一系列声明。
+ */
 class ProgramNode : AstNode
 {
-    AstNode[] declarations;
+    AstNode[] declarations;  /// 声明列表
 
     this()
     {
@@ -51,11 +109,16 @@ class ProgramNode : AstNode
     }
 }
 
+/**
+ * 类型节点
+ *
+ * 表示类型信息。
+ */
 class TypeNode : AstNode
 {
-    string typeName;
-    bool isSlice = false;
-    TypeNode elementType;
+    string typeName;      /// 类型名
+    bool isSlice = false; /// 是否为切片
+    TypeNode elementType; /// 元素类型
 
     this(string name)
     {
@@ -64,11 +127,14 @@ class TypeNode : AstNode
     }
 }
 
+/**
+ * 变量声明节点
+ */
 class VarDeclNode : AstNode
 {
-    string name;
-    TypeNode typeNode;
-    AstNode initializer;
+    string name;          /// 变量名
+    TypeNode typeNode;    /// 类型节点
+    AstNode initializer;  /// 初始化表达式
 
     this()
     {
@@ -76,6 +142,9 @@ class VarDeclNode : AstNode
     }
 }
 
+/**
+ * 表达式语句节点
+ */
 class ExprStmtNode : AstNode
 {
     AstNode expression;

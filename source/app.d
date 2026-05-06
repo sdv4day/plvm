@@ -381,6 +381,171 @@ int testBoth() { int sum = 0; int i = 0;
     }
 
     // ===================================================================
+    // 九点五、嵌套循环测试
+    // ===================================================================
+    writeln("── 九点五、嵌套循环测试 ──");
+    {
+        enum src = `
+int testNestedWhile() {
+    int sum = 0;
+    int i = 0;
+    while (i < 3) {
+        int j = 0;
+        while (j < 3) {
+            sum = sum + i * 3 + j;
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    return sum;
+}
+int testNestedFor() {
+    int sum = 0;
+    int i; int j;
+    for (i = 0; i < 3; i = i + 1) {
+        for (j = 0; j < 4; j = j + 1) {
+            sum = sum + 1;
+        }
+    }
+    return sum;
+}
+int testMixedLoop() {
+    int sum = 0;
+    int i = 0;
+    while (i < 2) {
+        int j;
+        for (j = 0; j < 3; j = j + 1) {
+            sum = sum + i + j;
+        }
+        i = i + 1;
+    }
+    return sum;
+}
+int testNestedBreak() {
+    int sum = 0;
+    int i = 0;
+    while (i < 5) {
+        int j = 0;
+        while (j < 5) {
+            if (j == 2) break;
+            sum = sum + 1;
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    return sum;
+}
+int testLabeledBreak() {
+    int result = 0;
+    int i = 0;
+    while (i < 3) {
+        int j = 0;
+        while (j < 3) {
+            if (i == 1 && j == 1) {
+                result = 99;
+                break;
+            }
+            j = j + 1;
+        }
+        if (result == 99) break;
+        i = i + 1;
+    }
+    return result;
+}
+`;
+        enum int eNestedWhile   = (){ mixin(src); return testNestedWhile();   }();
+        enum int eNestedFor     = (){ mixin(src); return testNestedFor();     }();
+        enum int eMixedLoop     = (){ mixin(src); return testMixedLoop();     }();
+        enum int eNestedBreak   = (){ mixin(src); return testNestedBreak();   }();
+        enum int eLabeledBreak  = (){ mixin(src); return testLabeledBreak();  }();
+
+        runWithVM(src, eNestedWhile,   "testNestedWhile",   "嵌套 while 循环");
+        runWithVM(src, eNestedFor,     "testNestedFor",     "嵌套 for 循环 (3x4=12)");
+        runWithVM(src, eMixedLoop,     "testMixedLoop",     "while+for 混合循环");
+        runWithVM(src, eNestedBreak,   "testNestedBreak",   "嵌套循环内层 break");
+        runWithVM(src, eLabeledBreak,  "testLabeledBreak",  "模拟标签 break");
+    }
+
+    // ===================================================================
+    // 九点六、循环边界与特殊情况测试
+    // ===================================================================
+    writeln("── 九点六、循环边界与特殊情况测试 ──");
+    {
+        enum src = `
+int testWhileFalse() {
+    while (false) { return 1; }
+    return 0;
+}
+int testDoWhileFalse() {
+    int x = 0;
+    do { x = 42; } while (false);
+    return x;
+}
+int testForEmpty() {
+    int s = 0;
+    int i;
+    for (i = 0; i < 0; i = i + 1) { s = s + 1; }
+    return s;
+}
+int testForNoBody() {
+    int i;
+    for (i = 0; i < 10; i = i + 1) { }
+    return i;
+}
+int testWhileDecrement() {
+    int sum = 0;
+    int i = 5;
+    while (i > 0) {
+        sum = sum + i;
+        i = i - 1;
+    }
+    return sum;
+}
+int testForStep2() {
+    int sum = 0;
+    int i;
+    for (i = 0; i < 10; i = i + 2) {
+        sum = sum + i;
+    }
+    return sum;
+}
+int testForNegative() {
+    int sum = 0;
+    int i;
+    for (i = 10; i > 0; i = i - 1) {
+        sum = sum + 1;
+    }
+    return sum;
+}
+int testLoopEarlyReturn() {
+    int i = 0;
+    while (i < 100) {
+        if (i == 5) return i;
+        i = i + 1;
+    }
+    return -1;
+}
+`;
+        enum int eWhileFalse     = (){ mixin(src); return testWhileFalse();     }();
+        enum int eDoWhileFalse   = (){ mixin(src); return testDoWhileFalse();   }();
+        enum int eForEmpty       = (){ mixin(src); return testForEmpty();       }();
+        enum int eForNoBody      = (){ mixin(src); return testForNoBody();      }();
+        enum int eWhileDecrement = (){ mixin(src); return testWhileDecrement(); }();
+        enum int eForStep2       = (){ mixin(src); return testForStep2();       }();
+        enum int eForNegative    = (){ mixin(src); return testForNegative();    }();
+        enum int eEarlyReturn    = (){ mixin(src); return testLoopEarlyReturn(); }();
+
+        runWithVM(src, eWhileFalse,     "testWhileFalse",     "while(false) 不执行");
+        runWithVM(src, eDoWhileFalse,   "testDoWhileFalse",   "do-while(false) 执行一次");
+        runWithVM(src, eForEmpty,       "testForEmpty",       "for 条件初始为假");
+        runWithVM(src, eForNoBody,      "testForNoBody",      "for 空循环体");
+        runWithVM(src, eWhileDecrement, "testWhileDecrement", "while 递减循环 5+4+3+2+1");
+        runWithVM(src, eForStep2,       "testForStep2",       "for 步长为2 (0+2+4+6+8)");
+        runWithVM(src, eForNegative,    "testForNegative",    "for 递减循环 10次");
+        runWithVM(src, eEarlyReturn,    "testLoopEarlyReturn", "循环中提前 return");
+    }
+
+    // ===================================================================
     // 十、函数测试
     // ===================================================================
     writeln("── 十、函数测试 ──");
@@ -516,18 +681,156 @@ int testNestedTern(){ int x = 15; return x > 10 ? (x > 20 ? 3 : 2) : 1; }
     }
 
     // ===================================================================
-    // 十四、数组字面量测试
+    // 十四、数组操作测试
     // ===================================================================
-    writeln("── 十四、数组字面量测试 ──");
+    writeln("── 十四、数组操作测试 ──");
     {
         enum src = `
-int testArrayLit() {
+int testArrayCreate() {
     auto a = [1, 2, 3, 4, 5];
-    return 42;
+    return cast(int)a.length;
+}
+int testArrayGet() {
+    auto a = [10, 20, 30, 40, 50];
+    return a[2];
+}
+int testArraySet() {
+    auto a = [1, 2, 3];
+    a[1] = 99;
+    return a[1];
+}
+int testArrayLength() {
+    auto a = [1, 2, 3, 4, 5, 6, 7];
+    return cast(int)a.length;
+}
+int testArraySum() {
+    auto a = [1, 2, 3, 4, 5];
+    int sum = 0;
+    int i = 0;
+    while (i < cast(int)a.length) {
+        sum = sum + a[i];
+        i = i + 1;
+    }
+    return sum;
+}
+int testArrayModify() {
+    auto a = [0, 0, 0, 0, 0];
+    int i = 0;
+    while (i < cast(int)a.length) {
+        a[i] = i * 2;
+        i = i + 1;
+    }
+    return a[3];
 }
 `;
-        enum int eArrayLit = (){ mixin(src); return testArrayLit(); }();
-        runWithVM(src, eArrayLit, "testArrayLit", "数组字面量 [1,2,3,4,5]");
+        enum int eArrayCreate  = (){ mixin(src); return testArrayCreate();  }();
+        enum int eArrayGet     = (){ mixin(src); return testArrayGet();     }();
+        enum int eArraySet     = (){ mixin(src); return testArraySet();     }();
+        enum int eArrayLength  = (){ mixin(src); return testArrayLength();  }();
+        enum int eArraySum     = (){ mixin(src); return testArraySum();     }();
+        enum int eArrayModify  = (){ mixin(src); return testArrayModify();  }();
+
+        runWithVM(src, eArrayCreate,  "testArrayCreate",  "数组创建与长度");
+        runWithVM(src, eArrayGet,     "testArrayGet",     "数组索引读取 a[2]");
+        runWithVM(src, eArraySet,     "testArraySet",     "数组索引赋值 a[1]=99");
+        runWithVM(src, eArrayLength,  "testArrayLength",  "数组 .length 属性");
+        runWithVM(src, eArraySum,     "testArraySum",     "数组遍历求和");
+        runWithVM(src, eArrayModify,  "testArrayModify",  "数组元素修改");
+    }
+
+    // ===================================================================
+    // 十四点五、数组高级操作测试
+    // ===================================================================
+    writeln("── 十四点五、数组高级操作测试 ──");
+    {
+        enum src = `
+int testArrayCopy() {
+    auto a = [1, 2, 3];
+    auto b = a;
+    b[0] = 99;
+    return a[0];
+}
+int testArrayFind() {
+    auto a = [5, 3, 8, 1, 9, 2];
+    int target = 8;
+    int i = 0;
+    int found = -1;
+    while (i < cast(int)a.length) {
+        if (a[i] == target) {
+            found = i;
+            break;
+        }
+        i = i + 1;
+    }
+    return found;
+}
+int testArrayReverse() {
+    auto a = [1, 2, 3, 4, 5];
+    int i = 0;
+    int j = cast(int)a.length - 1;
+    while (i < j) {
+        int tmp = a[i];
+        a[i] = a[j];
+        a[j] = tmp;
+        i = i + 1;
+        j = j - 1;
+    }
+    return a[0];
+}
+int testArrayMinMax() {
+    auto a = [3, 7, 2, 9, 1, 8, 4];
+    int minVal = a[0];
+    int maxVal = a[0];
+    int i = 1;
+    while (i < cast(int)a.length) {
+        if (a[i] < minVal) minVal = a[i];
+        if (a[i] > maxVal) maxVal = a[i];
+        i = i + 1;
+    }
+    return minVal * 10 + maxVal;
+}
+int testArrayBubbleSort() {
+    auto a = [5, 3, 8, 1, 9, 2, 7, 4, 6];
+    int n = cast(int)a.length;
+    int i = 0;
+    while (i < n - 1) {
+        int j = 0;
+        while (j < n - i - 1) {
+            if (a[j] > a[j + 1]) {
+                int tmp = a[j];
+                a[j] = a[j + 1];
+                a[j + 1] = tmp;
+            }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    return a[0] * 100 + a[4] * 10 + a[8];
+}
+int testArrayCountEven() {
+    auto a = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    int count = 0;
+    int i = 0;
+    while (i < cast(int)a.length) {
+        if (a[i] % 2 == 0) count = count + 1;
+        i = i + 1;
+    }
+    return count;
+}
+`;
+        enum int eArrayCopy      = (){ mixin(src); return testArrayCopy();      }();
+        enum int eArrayFind      = (){ mixin(src); return testArrayFind();      }();
+        enum int eArrayReverse   = (){ mixin(src); return testArrayReverse();   }();
+        enum int eArrayMinMax    = (){ mixin(src); return testArrayMinMax();    }();
+        enum int eArrayBubbleSort = (){ mixin(src); return testArrayBubbleSort(); }();
+        enum int eArrayCountEven  = (){ mixin(src); return testArrayCountEven();  }();
+
+        runWithVM(src, eArrayCopy,       "testArrayCopy",       "数组复制（引用语义）");
+        runWithVM(src, eArrayFind,       "testArrayFind",       "数组查找元素");
+        runWithVM(src, eArrayReverse,    "testArrayReverse",    "数组原地反转");
+        runWithVM(src, eArrayMinMax,     "testArrayMinMax",     "数组求最小最大值");
+        runWithVM(src, eArrayBubbleSort, "testArrayBubbleSort", "数组冒泡排序");
+        runWithVM(src, eArrayCountEven,  "testArrayCountEven",  "数组统计偶数");
     }
 
     // ===================================================================
@@ -680,6 +983,115 @@ int testSCOrT()  { if (true || expensive()) return 1; return 0; }
 
         runWithVM(src, eSCAndF, "testSCAndF", "短路 && 左假→跳过右");
         runWithVM(src, eSCOrT,  "testSCOrT",  "短路 || 左真→跳过右");
+    }
+
+    // ===================================================================
+    // 测试 executeModule 和 executeModuleWithEntry
+    // ===================================================================
+    writeln("\n=== 测试 executeModule 和 executeModuleWithEntry ===");
+
+    Plvm plvm = new Plvm();
+
+    // 测试 executeModule
+    {
+        string script1 = "int main() { return 42; }";
+        auto handle1 = plvm.loadScript(script1);
+        auto result1 = plvm.executeModule(handle1);
+        assertTest(result1.asInteger(), 42L, "executeModule: main返回42");
+    }
+
+    // 测试 executeModule 带参数
+    {
+        string script2 = "int add(int a, int b) { return a + b; } int main() { return add(10, 20); }";
+        auto handle2 = plvm.loadScript(script2);
+        auto result2 = plvm.executeModule(handle2);
+        assertTest(result2.asInteger(), 30L, "executeModule: 调用add函数");
+    }
+
+    // 测试 callFunction - 宿主直接调用脚本函数
+    {
+        string script = "int add(int a, int b) { return a + b; } int multiply(int x, int y) { return x * y; }";
+        auto handle = plvm.loadScript(script);
+        
+        // 直接调用 add 函数
+        auto resultAdd = plvm.callFunction(handle, "add", 10, 20);
+        assertTest(resultAdd.asInteger(), 30L, "callFunction: add(10, 20) = 30");
+        
+        // 直接调用 multiply 函数
+        auto resultMul = plvm.callFunction(handle, "multiply", 6, 7);
+        assertTest(resultMul.asInteger(), 42L, "callFunction: multiply(6, 7) = 42");
+        
+        // 带负数参数调用
+        auto resultNeg = plvm.callFunction(handle, "add", -5, 10);
+        assertTest(resultNeg.asInteger(), 5L, "callFunction: add(-5, 10) = 5");
+    }
+
+    // 测试 callFunction - 多参数函数
+    {
+        string script = "int sum3(int a, int b, int c) { return a + b + c; }";
+        auto handle = plvm.loadScript(script);
+        
+        auto result = plvm.callFunction(handle, "sum3", 1, 2, 3);
+        assertTest(result.asInteger(), 6L, "callFunction: sum3(1, 2, 3) = 6");
+    }
+
+    // 测试 callOnce 带参数 - 一次性调用脚本函数
+    {
+        string script = "int add(int a, int b) { return a + b; }";
+        
+        // 一次性调用：编译 + 执行 + 传递参数
+        auto result = plvm.callOnce(script, "add", 100, 200);
+        assertTest(result.asInteger(), 300L, "callOnce: add(100, 200) = 300");
+    }
+
+    // 测试 callOnce 带多个参数
+    {
+        string script = "int calc(int a, int b, int c) { return (a + b) * c; }";
+        
+        auto result = plvm.callOnce(script, "calc", 2, 3, 4);
+        assertTest(result.asInteger(), 20L, "callOnce: calc(2, 3, 4) = 20");
+    }
+
+    // 测试 executeModuleWithEntry
+    {
+        string script3 = `
+            int funcA() { return 100; }
+            int funcB() { return 200; }
+            int main() { return 300; }
+        `;
+        auto handle3 = plvm.loadScript(script3);
+        
+        // 查找 funcA 的入口点
+        size_t entryA = 0;
+        size_t entryB = 0;
+        foreach (ref f; handle3.program.functions)
+        {
+            if (f.name == "funcA") entryA = f.entryPoint;
+            if (f.name == "funcB") entryB = f.entryPoint;
+        }
+        
+        auto resultA = plvm.executeModuleWithEntry(handle3, entryA);
+        assertTest(resultA.asInteger(), 100L, "executeModuleWithEntry: funcA返回100");
+        
+        auto resultB = plvm.executeModuleWithEntry(handle3, entryB);
+        assertTest(resultB.asInteger(), 200L, "executeModuleWithEntry: funcB返回200");
+    }
+
+    // 测试 executeModuleWithArgs - 带参数执行
+    {
+        string script4 = "int multiply(int x, int y) { return x * y; }";
+        auto handle4 = plvm.loadScript(script4);
+        
+        size_t entry = 0;
+        foreach (ref f; handle4.program.functions)
+        {
+            if (f.name == "multiply") entry = f.entryPoint;
+        }
+        
+        // 使用 executeModuleWithArgs 传递参数
+        Value[] args = [Value.makeLong(7), Value.makeLong(8)];
+        auto result = plvm.executeModuleWithArgs(handle4, entry, args);
+        assertTest(result.asInteger(), 56L, "executeModuleWithArgs: multiply(7, 8) = 56");
     }
 
     // ===================================================================
