@@ -154,30 +154,6 @@ struct StructFieldInfo
 }
 
 /**
- * 获取结构体字段名列表
- *
- * Params:
- *   T = 结构体类型
- *
- * Returns: 字段名数组
- */
-string[] getStructFieldNames(T)()
-{
-    string[] names;
-    static if (is(T == struct))
-    {
-        foreach (i, member; __traits(allMembers, T))
-        {
-            static if (__traits(compiles, __traits(getMember, T, member)))
-            {
-                import std.traits : FieldTypeTuple;
-            }
-        }
-    }
-    return names;
-}
-
-/**
  * 枚举值信息
  */
 struct EnumValue
@@ -303,6 +279,20 @@ public:
     {
         string funcName = name.length > 0 ? name : __traits(identifier, Func);
         registeredHostIndices[registeredHostIndices.length] = funcName;
+    }
+
+    /**
+     * 注册宿主函数索引
+     *
+     * 直接注册函数名和索引的映射。
+     *
+     * Params:
+     *   name = 函数名
+     *   idx = 函数索引
+     */
+    void registerHostFunctionIndex(string name, size_t idx)
+    {
+        registeredHostIndices[idx] = name;
     }
 
     /// 获取枚举成员映射
@@ -650,4 +640,23 @@ unittest
     ];
     auto result = wrapper(args);
     assert(result.asInteger() == 72);
+}
+
+/**
+ * registerFunction delegate 变量支持验证测试
+ *
+ * 验证 registerFunction 是否能正确注册 delegate 类型的函数。
+ */
+unittest
+{
+    int captured = 100;
+
+    int delegate(int, int) dg = delegate(int a, int b) {
+        return captured + a + b;
+    };
+
+    auto wrapper = createHostFunctionWrapper!(dg)();
+    Value[] args = [Value.makeInt(3), Value.makeInt(4)];
+    auto result = wrapper(args);
+    assert(result.asInteger() == 107);
 }

@@ -166,6 +166,130 @@ public:
     }
 
     /**
+     * 注册委托函数
+     *
+     * 将 D 委托注册为脚本可调用的宿主函数。
+     * 支持捕获局部变量的委托。
+     *
+     * Params:
+     *   T = 委托类型（自动推断）
+     *   dg = 委托实例
+     *   name = 函数名
+     */
+    void registerDelegate(T)(T dg, string name)
+    if (is(T == delegate))
+    {
+        import std.traits : ReturnType, Parameters;
+
+        alias RT = ReturnType!T;
+        alias PT = Parameters!T;
+
+        size_t idx = hostFuncEntries.length;
+
+        static if (PT.length == 0)
+        {
+            HostFunction wrapper = (Value[] args) {
+                auto result = dg();
+                return valueFromD(result);
+            };
+            hostFuncEntries ~= HostFuncEntry(name, wrapper);
+        }
+        else static if (PT.length == 1)
+        {
+            HostFunction wrapper = (Value[] args) {
+                auto a0 = valueToD!(PT[0])(args[0]);
+                auto result = dg(a0);
+                return valueFromD(result);
+            };
+            hostFuncEntries ~= HostFuncEntry(name, wrapper);
+        }
+        else static if (PT.length == 2)
+        {
+            HostFunction wrapper = (Value[] args) {
+                auto a0 = valueToD!(PT[0])(args[0]);
+                auto a1 = valueToD!(PT[1])(args[1]);
+                auto result = dg(a0, a1);
+                return valueFromD(result);
+            };
+            hostFuncEntries ~= HostFuncEntry(name, wrapper);
+        }
+        else static if (PT.length == 3)
+        {
+            HostFunction wrapper = (Value[] args) {
+                auto a0 = valueToD!(PT[0])(args[0]);
+                auto a1 = valueToD!(PT[1])(args[1]);
+                auto a2 = valueToD!(PT[2])(args[2]);
+                auto result = dg(a0, a1, a2);
+                return valueFromD(result);
+            };
+            hostFuncEntries ~= HostFuncEntry(name, wrapper);
+        }
+        else static if (PT.length == 4)
+        {
+            HostFunction wrapper = (Value[] args) {
+                auto a0 = valueToD!(PT[0])(args[0]);
+                auto a1 = valueToD!(PT[1])(args[1]);
+                auto a2 = valueToD!(PT[2])(args[2]);
+                auto a3 = valueToD!(PT[3])(args[3]);
+                auto result = dg(a0, a1, a2, a3);
+                return valueFromD(result);
+            };
+            hostFuncEntries ~= HostFuncEntry(name, wrapper);
+        }
+        else
+        {
+            HostFunction wrapper = createDelegateWrapper!T(dg);
+            hostFuncEntries ~= HostFuncEntry(name, wrapper);
+        }
+
+        hostApi.registerHostFunctionIndex(name, idx);
+    }
+
+    /**
+     * 创建委托包装器（5+ 参数使用）
+     *
+     * 将 D 委托包装为 PLVM 可调用的函数。
+     */
+    private Value delegate(Value[] args) createDelegateWrapper(T)(T dg)
+    {
+        import std.traits : ReturnType, Parameters;
+        import std.conv : text;
+
+        alias RT = ReturnType!T;
+        alias PT = Parameters!T;
+
+        static string buildArgDecls()
+        {
+            string result;
+            static foreach (i, FT; PT)
+            {
+                result ~= text("auto a", i, " = valueToD!(PT[", i, "])(args[", i, "]); ");
+            }
+            return result;
+        }
+
+        static string buildCallArgs()
+        {
+            string result;
+            static foreach (i; 0 .. PT.length)
+            {
+                static if (i > 0) result ~= ", ";
+                result ~= text("a", i);
+            }
+            return result;
+        }
+
+        enum argDecls = buildArgDecls();
+        enum callArgs = buildCallArgs();
+
+        return (Value[] args) {
+            mixin(argDecls);
+            auto result = mixin("dg(" ~ callArgs ~ ")");
+            return valueFromD(result);
+        };
+    }
+
+    /**
      * 注册结构体类型
      *
      * 将 D 结构体类型注册到脚本引擎。
@@ -202,6 +326,7 @@ public:
      */
     void registerConstant(string name, long value)
     {
+        vm.setGlobal(name, Value.makeLong(value));
     }
 
     void setSandbox(size_t maxSteps_, size_t maxMem = 0)
@@ -325,6 +450,8 @@ public:
             auto handle = new ModHandle(moduleName);
             handle.program = program;
 
+            handle.entryPoint = size_t.max;
+
             foreach (ref f; program.functions)
             {
                 if (f.name == "main" || f.name == "__anon_main__")
@@ -333,7 +460,7 @@ public:
                     break;
                 }
             }
-            if (handle.entryPoint == 0 && program.functions.length > 0)
+            if (handle.entryPoint == size_t.max && program.functions.length > 0)
                 handle.entryPoint = program.functions[0].entryPoint;
 
             return handle;

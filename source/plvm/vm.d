@@ -343,6 +343,8 @@ public:
             {
                 size_t slot = cast(size_t)instr.arg1;
                 auto frame = &callStack[$ - 1];
+                if (frame.bp + slot >= locals.length)
+                    throw new VMException(text("局部变量索引越界: ", slot));
                 push(locals[frame.bp + slot]);
                 break;
             }
@@ -351,6 +353,8 @@ public:
             {
                 size_t slot = cast(size_t)instr.arg1;
                 auto frame = &callStack[$ - 1];
+                if (frame.bp + slot >= locals.length)
+                    throw new VMException(text("局部变量索引越界: ", slot));
                 auto val = pop_();
                 locals[frame.bp + slot] = val;
                 break;
@@ -512,14 +516,14 @@ public:
             {
                 auto b = pop_();
                 auto a = pop_();
-                push(Value.makeLong(a.asInteger() << b.asInteger()));
+                push(Value.makeLong(a.asInteger() << (b.asInteger() & 0x3F)));
                 break;
             }
             case OpCode.SHR:
             {
                 auto b = pop_();
                 auto a = pop_();
-                push(Value.makeLong(a.asInteger() >> b.asInteger()));
+                push(Value.makeLong(a.asInteger() >> (b.asInteger() & 0x3F)));
                 break;
             }
 
@@ -594,9 +598,7 @@ public:
                 if (index < arrVal.length)
                     push(arrVal[index]);
                 else
-                {
-                    errorOut("数组索引越界");
-                }
+                    throw new VMException("数组索引越界");
                 break;
             }
             case OpCode.ARRAY_SET:
@@ -612,9 +614,7 @@ public:
                     arr.arrayValue = arrVal;
                 }
                 else
-                {
-                    errorOut("数组索引越界");
-                }
+                    throw new VMException("数组索引越界");
                 break;
             }
             case OpCode.ARRAY_APPEND:
@@ -644,7 +644,7 @@ public:
                 if (start <= end && end <= arrVal.length)
                     push(Value.makeArray(arrVal[start .. end]));
                 else
-                    errorOut("切片索引越界");
+                    throw new VMException("切片索引越界");
                 break;
             }
 
@@ -664,7 +664,7 @@ public:
                 }
                 else
                 {
-                    errorOut(text("结构体字段不存在: ", fieldName));
+                    throw new VMException(text("结构体字段不存在: ", fieldName));
                 }
                 break;
             }
@@ -680,7 +680,7 @@ public:
                 }
                 else
                 {
-                    errorOut(text("无法设置字段: ", fieldName));
+                    throw new VMException(text("无法设置字段: ", fieldName));
                 }
                 break;
             }
@@ -695,7 +695,7 @@ public:
                 }
                 else
                 {
-                    errorOut(text("属性不存在: ", fieldName));
+                    throw new VMException(text("属性不存在: ", fieldName));
                 }
                 break;
             }
@@ -824,8 +824,7 @@ public:
 
         if (funcInfo is null)
         {
-            errorOut(text("未找到函数: ", funcName));
-            return;
+            throw new VMException(text("未找到函数: ", funcName));
         }
 
         size_t bp = locals.length;
@@ -866,7 +865,7 @@ public:
         }
         else
         {
-            errorOut(text("未注册的主机函数: ", hostIdx));
+            throw new VMException(text("未注册的主机函数: ", hostIdx));
         }
     }
 
@@ -898,8 +897,7 @@ public:
     {
         if (sp >= stack.length)
         {
-            errorOut("栈溢出");
-            return;
+            throw new VMException("栈溢出");
         }
         stack[sp] = v;
         sp++;

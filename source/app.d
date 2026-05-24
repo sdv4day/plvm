@@ -1076,6 +1076,44 @@ int testSCOrT()  { if (true || expensive()) return 1; return 0; }
     }
 
     // ===================================================================
+    // 二十三、宿主函数 delegate/函数指针 注册测试
+    // ===================================================================
+    writeln("── 二十三、宿主函数 delegate/函数指针 注册测试 ──");
+    {
+        static int staticAdd(int a, int b) { return a + b; }
+
+        auto plvm = new Plvm();
+        plvm.registerFunction!staticAdd("staticAdd");
+
+        {
+            auto result = plvm.callOnce(
+                "int main() { return staticAdd(10, 20); }", "main");
+            assertTest(result.asInteger(), 30, "静态函数作为宿主函数");
+        }
+    }
+
+    // ===================================================================
+    // 二十四、registerDelegate 捕获变量委托测试
+    // ===================================================================
+    writeln("── 二十四、registerDelegate 捕获变量委托测试 ──");
+    {
+        int captured = 100;
+
+        int delegate(int a, int b) dg = delegate(int a, int b) {
+            return captured + a + b;
+        };
+
+        auto plvm = new Plvm();
+        plvm.registerDelegate(dg, "capturedAdd");
+
+        {
+            auto result = plvm.callOnce(
+                "int main() { return capturedAdd(3, 4); }", "main");
+            assertTest(result.asInteger(), 107, "registerDelegate 捕获变量委托");
+        }
+    }
+
+    // ===================================================================
     // 测试 executeModule 和 executeModuleWithEntry
     // ===================================================================
     writeln("\n=== 测试 executeModule 和 executeModuleWithEntry ===");

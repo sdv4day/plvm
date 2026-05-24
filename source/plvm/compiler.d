@@ -156,20 +156,6 @@ private:
             program.emit(Instruction.castGeneric(typeId, line));
             return;
         }
-
-        switch (t)
-        {
-            case "byte": program.emit(Instruction.castToByte(line)); return;
-            case "ubyte": program.emit(Instruction.castToUbyte(line)); return;
-            case "short": program.emit(Instruction.castToShort(line)); return;
-            case "ushort": program.emit(Instruction.castToUshort(line)); return;
-            case "int": program.emit(Instruction.castToInt(line)); return;
-            case "uint": program.emit(Instruction.castToUint(line)); return;
-            case "long": program.emit(Instruction.castToLong(line)); return;
-            case "ulong": program.emit(Instruction.castToUlong(line)); return;
-            case "char": program.emit(Instruction.castToChar(line)); return;
-            default: break;
-        }
     }
 
     void compileExpr(AstNode node)
