@@ -1,7 +1,6 @@
 {
     "name": "plvm",
     "description": "PLVM: 轻量可嵌入 D 语法脚本引擎 (Portable Lightweight Virtual Machine)",
-    "version": "0.1.0",
     "authors": ["PLVM Team"],
     "license": "BSL-1.0",
     "targetType": "library",
